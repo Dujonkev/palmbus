@@ -56,7 +56,7 @@ class PalmBusNextDepartureSensor(CoordinatorEntity[PalmBusCoordinator], SensorEn
     """Affiche l'heure du prochain passage à l'arrêt suivi."""
 
     _attr_has_entity_name = True
-    _attr_name = "Prochain passage"
+    _attr_translation_key = "next_departure"
     _attr_icon = "mdi:bus-clock"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
@@ -112,7 +112,7 @@ class PalmBusAlertsSensor(CoordinatorEntity[PalmBusCoordinator], SensorEntity):
     """Nombre de perturbations en cours sur les lignes / l'arrêt suivis."""
 
     _attr_has_entity_name = True
-    _attr_name = "Perturbations"
+    _attr_translation_key = "alerts"
     _attr_icon = "mdi:alert-circle-outline"
     _attr_native_unit_of_measurement = "perturbation(s)"
 

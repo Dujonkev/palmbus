@@ -43,5 +43,15 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "next_departure": {
+        "name": "Next departure"
+      },
+      "alerts": {
+        "name": "Disruptions"
+      }
+    }
   }
 }

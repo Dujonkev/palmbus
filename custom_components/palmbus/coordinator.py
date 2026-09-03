@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from google.transit import gtfs_realtime_pb2
 from homeassistant.core import HomeAssistant
@@ -17,7 +17,7 @@ from .const import (
     GTFS_RT_ALERTS_URL,
     GTFS_RT_TRIP_UPDATES_URL,
 )
-from .gtfs_static import GtfsStaticData
+from .gtfs_static import GtfsStaticData, async_get_static_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +85,18 @@ class PalmBusCoordinator(DataUpdateCoordinator[PalmBusData]):
         self.max_departures = max_departures
 
     async def _async_update_data(self) -> PalmBusData:
+        # Les données statiques (noms de lignes, couleurs, destinations) sont
+        # partagées entre toutes les entrées configurées et ne sont
+        # re-téléchargées que lorsque le cache dépasse STATIC_DATA_MAX_AGE.
+        try:
+            self.static_data = await async_get_static_data(self.hass)
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.debug(
+                "Rafraîchissement du GTFS statique Palm Bus impossible, "
+                "utilisation des données déjà en mémoire",
+                exc_info=True,
+            )
+
         try:
             trip_feed = await self._async_fetch_feed(GTFS_RT_TRIP_UPDATES_URL)
         except Exception as err:  # pylint: disable=broad-except
@@ -92,7 +104,12 @@ class PalmBusCoordinator(DataUpdateCoordinator[PalmBusData]):
                 f"Impossible de récupérer le flux temps réel Palm Bus : {err}"
             ) from err
 
-        departures = self._extract_departures(trip_feed)
+        try:
+            departures = self._extract_departures(trip_feed)
+        except Exception as err:  # pylint: disable=broad-except
+            raise UpdateFailed(
+                f"Réponse GTFS-RT Palm Bus invalide ou inattendue : {err}"
+            ) from err
 
         alerts: list[Alert] = []
         try:
@@ -125,7 +142,11 @@ class PalmBusCoordinator(DataUpdateCoordinator[PalmBusData]):
             if trip_desc.schedule_relationship == trip_desc.CANCELED:
                 continue
 
-            route_id = trip_desc.route_id
+            trip_info = self.static_data.trip_info(trip_desc.trip_id)
+            # `route_id` est optionnel dans GTFS-RT : certains producteurs le
+            # laissent vide et s'attendent à ce qu'on le retrouve via
+            # `trip_id` dans le GTFS statique (trips.txt).
+            route_id = trip_desc.route_id or (trip_info.route_id if trip_info else "")
             if self.line_filter and route_id and route_id not in self.line_filter:
                 continue
 
@@ -139,7 +160,6 @@ class PalmBusCoordinator(DataUpdateCoordinator[PalmBusData]):
                 if estimated is None or estimated < past_cutoff:
                     continue
 
-                trip_info = self.static_data.trip_info(trip_desc.trip_id)
                 route_info = self.static_data.route_info(route_id) if route_id else None
 
                 delay = None

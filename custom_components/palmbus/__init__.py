@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.const import Platform
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONF_LINE_FILTER, CONF_MAX_DEPARTURES, CONF_STOP_ID, CONF_STOP_NAME, DEFAULT_MAX_DEPARTURES
 from .coordinator import PalmBusCoordinator
@@ -25,7 +28,12 @@ PalmBusConfigEntry = ConfigEntry[PalmBusCoordinator]
 
 async def async_setup_entry(hass: HomeAssistant, entry: PalmBusConfigEntry) -> bool:
     """Initialise une entrée de configuration Palm Bus."""
-    static_data = await async_get_static_data(hass)
+    try:
+        static_data = await async_get_static_data(hass)
+    except (aiohttp.ClientError, TimeoutError, OSError) as err:
+        raise ConfigEntryNotReady(
+            "Impossible de télécharger les données GTFS statiques de Palm Bus"
+        ) from err
 
     coordinator = PalmBusCoordinator(
         hass,

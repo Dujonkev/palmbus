@@ -14,6 +14,7 @@ du matériel domestique).
 """
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
@@ -33,6 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _CACHE_FILENAME = "palmbus_gtfs_static.zip"
 _HASS_DATA_KEY = "static_gtfs"
+_LOCK_KEY = "static_gtfs_lock"
 
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=90)
 
@@ -87,16 +89,20 @@ class GtfsStaticData:
         force_refresh: bool = False,
     ) -> "GtfsStaticData":
         """Charge le GTFS statique, en réutilisant le cache disque si récent."""
-        need_download = force_refresh or not os.path.exists(cache_path)
+        loop = asyncio.get_running_loop()
+        cache_exists = await loop.run_in_executor(None, os.path.exists, cache_path)
+        need_download = force_refresh or not cache_exists
         if not need_download:
-            age = time.time() - os.path.getmtime(cache_path)
+            mtime = await loop.run_in_executor(None, os.path.getmtime, cache_path)
+            age = time.time() - mtime
             need_download = age > STATIC_DATA_MAX_AGE.total_seconds()
 
         if need_download:
             try:
                 await cls._async_download(session, cache_path)
             except Exception:  # pylint: disable=broad-except
-                if os.path.exists(cache_path):
+                cache_exists = await loop.run_in_executor(None, os.path.exists, cache_path)
+                if cache_exists:
                     _LOGGER.warning(
                         "Téléchargement du GTFS statique Palm Bus impossible, "
                         "utilisation du cache local existant"
@@ -104,7 +110,8 @@ class GtfsStaticData:
                 else:
                     raise
 
-        data = cls(_zip_path=cache_path, fetched_at=os.path.getmtime(cache_path))
+        fetched_at = await loop.run_in_executor(None, os.path.getmtime, cache_path)
+        data = cls(_zip_path=cache_path, fetched_at=fetched_at)
         await data._async_parse_light_tables()
         return data
 
@@ -114,6 +121,12 @@ class GtfsStaticData:
         async with session.get(STATIC_GTFS_URL, timeout=_REQUEST_TIMEOUT) as resp:
             resp.raise_for_status()
             content = await resp.read()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, GtfsStaticData._write_cache_sync, cache_path, content)
+
+    @staticmethod
+    def _write_cache_sync(cache_path: str, content: bytes) -> None:
+        """Écrit le zip GTFS sur disque (appelé dans un executor, hors boucle asyncio)."""
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         tmp_path = f"{cache_path}.tmp"
         with open(tmp_path, "wb") as file:
@@ -122,8 +135,6 @@ class GtfsStaticData:
 
     async def _async_parse_light_tables(self) -> None:
         """Analyse stops.txt, routes.txt et trips.txt (tables raisonnables)."""
-        import asyncio
-
         loop = asyncio.get_running_loop()
         stops, routes, trips = await loop.run_in_executor(
             None, self._parse_light_tables_sync, self._zip_path
@@ -223,8 +234,6 @@ class GtfsStaticData:
 
     async def async_load_routes_for_stop(self, stop_id: str) -> list[RouteInfo]:
         """Parcourt stop_times.txt (une seule fois) pour trouver les lignes d'un arrêt."""
-        import asyncio
-
         if stop_id not in self._trip_ids_cache:
             loop = asyncio.get_running_loop()
             trip_ids = await loop.run_in_executor(
@@ -295,8 +304,20 @@ async def async_get_static_data(
         if time.time() - cached.fetched_at < STATIC_DATA_MAX_AGE.total_seconds():
             return cached
 
-    session = async_get_clientsession(hass)
-    cache_path = hass.config.path(".storage", _CACHE_FILENAME)
-    data = await GtfsStaticData.async_load(session, cache_path, force_refresh=force_refresh)
-    domain_data[_HASS_DATA_KEY] = data
-    return data
+    # Un verrou partagé évite que plusieurs arrêts configurés ne déclenchent
+    # chacun leur propre téléchargement/analyse du zip (~15 Mo) en parallèle
+    # au démarrage de Home Assistant ou quand le cache expire.
+    lock: asyncio.Lock = domain_data.setdefault(_LOCK_KEY, asyncio.Lock())
+    async with lock:
+        # Une autre entrée a peut-être déjà rafraîchi les données pendant
+        # qu'on attendait le verrou : on revérifie avant de télécharger.
+        cached = domain_data.get(_HASS_DATA_KEY)
+        if cached is not None and not force_refresh:
+            if time.time() - cached.fetched_at < STATIC_DATA_MAX_AGE.total_seconds():
+                return cached
+
+        session = async_get_clientsession(hass)
+        cache_path = hass.config.path(".storage", _CACHE_FILENAME)
+        data = await GtfsStaticData.async_load(session, cache_path, force_refresh=force_refresh)
+        domain_data[_HASS_DATA_KEY] = data
+        return data
