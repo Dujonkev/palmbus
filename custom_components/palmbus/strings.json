@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rechercher un arrêt Palm Bus",
+        "description": "Indiquez le nom (ou une partie du nom) de l'arrêt de bus à suivre, par exemple « {example} ».",
+        "data": {
+          "query": "Nom de l'arrêt"
+        }
+      },
+      "stop": {
+        "title": "Choisir l'arrêt",
+        "description": "Plusieurs arrêts correspondent à votre recherche. Sélectionnez le bon.",
+        "data": {
+          "stop_id": "Arrêt"
+        }
+      },
+      "lines": {
+        "title": "Lignes à suivre",
+        "description": "Arrêt sélectionné : {stop_name}. Choisissez les lignes à suivre à cet arrêt (laissez vide pour toutes les suivre) et le nombre de prochains passages à afficher.",
+        "data": {
+          "line_filter": "Lignes à suivre",
+          "max_departures": "Nombre de prochains passages"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de télécharger les données Palm Bus (transport.data.gouv.fr). Vérifiez la connexion Internet de Home Assistant et réessayez.",
+      "no_stops_found": "Aucun arrêt ne correspond à cette recherche.",
+      "unknown": "Erreur inattendue."
+    },
+    "abort": {
+      "already_configured": "Cet arrêt est déjà configuré."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Paramètres Palm Bus",
+        "data": {
+          "line_filter": "Lignes à suivre",
+          "max_departures": "Nombre de prochains passages"
+        }
+      }
+    }
+  }
+}

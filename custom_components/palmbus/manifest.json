@@ -1,0 +1,12 @@
+{
+  "domain": "palmbus",
+  "name": "Palm Bus",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://transport.data.gouv.fr/datasets/horaires-theoriques-et-temps-reel-gtfs-gtfs-rt-du-reseau-palmbus-cannes-pays-de-lerins",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://palmdeplacements.fr/",
+  "requirements": ["gtfs-realtime-bindings>=1.0.0"],
+  "version": "1.0.0"
+}

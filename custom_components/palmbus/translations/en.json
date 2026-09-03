@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Search for a Palm Bus stop",
+        "description": "Enter the name (or part of the name) of the bus stop to track, e.g. \"{example}\".",
+        "data": {
+          "query": "Stop name"
+        }
+      },
+      "stop": {
+        "title": "Choose the stop",
+        "description": "Several stops match your search. Select the right one.",
+        "data": {
+          "stop_id": "Stop"
+        }
+      },
+      "lines": {
+        "title": "Lines to track",
+        "description": "Selected stop: {stop_name}. Choose which lines to track at this stop (leave empty to track all of them) and how many upcoming departures to show.",
+        "data": {
+          "line_filter": "Lines to track",
+          "max_departures": "Number of upcoming departures"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not download Palm Bus data (transport.data.gouv.fr). Check Home Assistant's Internet connection and try again.",
+      "no_stops_found": "No stop matches this search.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This stop is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Palm Bus settings",
+        "data": {
+          "line_filter": "Lines to track",
+          "max_departures": "Number of upcoming departures"
+        }
+      }
+    }
+  }
+}
