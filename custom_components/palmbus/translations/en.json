@@ -1,13 +1,6 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Search for a Palm Bus stop",
-        "description": "Enter the name (or part of the name) of the bus stop to track, e.g. \"{example}\".",
-        "data": {
-          "query": "Stop name"
-        }
-      },
       "stop": {
         "title": "Choose the stop",
         "description": "Several stops match your search. Select the right one.",
@@ -22,6 +15,28 @@
           "line_filter": "Lines to track",
           "max_departures": "Number of upcoming departures"
         }
+      },
+      "search": {
+        "title": "Search for a Palm Bus stop",
+        "description": "Enter the name (or part of the name) of the bus stop to track, e.g. \"{example}\".",
+        "data": {
+          "query": "Stop name"
+        }
+      },
+      "user": {
+        "title": "Palm Bus",
+        "description": "What do you want to add?",
+        "menu_options": {
+          "search": "Follow a stop (next departures)",
+          "vehicles": "Live buses on the map"
+        }
+      },
+      "vehicles": {
+        "title": "Live buses on the map",
+        "description": "Every running bus will appear on the Home Assistant map (badge in its line colour). Choose the lines to show (leave empty for all).",
+        "data": {
+          "line_filter": "Lines to show"
+        }
       }
     },
     "error": {
@@ -30,7 +45,9 @@
       "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "This stop is already configured."
+      "already_configured": "Already configured.",
+      "cannot_connect": "Could not download Palm Bus data (transport.data.gouv.fr). Check Home Assistant's Internet connection and try again.",
+      "unknown": "Unexpected error."
     }
   },
   "options": {

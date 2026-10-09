@@ -1,13 +1,6 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Rechercher un arrêt Palm Bus",
-        "description": "Indiquez le nom (ou une partie du nom) de l'arrêt de bus à suivre, par exemple « {example} ».",
-        "data": {
-          "query": "Nom de l'arrêt"
-        }
-      },
       "stop": {
         "title": "Choisir l'arrêt",
         "description": "Plusieurs arrêts correspondent à votre recherche. Sélectionnez le bon.",
@@ -22,6 +15,28 @@
           "line_filter": "Lignes à suivre",
           "max_departures": "Nombre de prochains passages"
         }
+      },
+      "search": {
+        "title": "Rechercher un arrêt Palm Bus",
+        "description": "Indiquez le nom (ou une partie du nom) de l'arrêt de bus à suivre, par exemple « {example} ».",
+        "data": {
+          "query": "Nom de l'arrêt"
+        }
+      },
+      "user": {
+        "title": "Palm Bus",
+        "description": "Que voulez-vous ajouter ?",
+        "menu_options": {
+          "search": "Suivre un arrêt (prochains passages)",
+          "vehicles": "Bus en temps réel sur la carte"
+        }
+      },
+      "vehicles": {
+        "title": "Bus en temps réel sur la carte",
+        "description": "Chaque bus en circulation apparaîtra sur la carte de Home Assistant (pastille à la couleur de sa ligne). Choisissez les lignes à afficher (laissez vide pour toutes).",
+        "data": {
+          "line_filter": "Lignes à afficher"
+        }
       }
     },
     "error": {
@@ -30,7 +45,9 @@
       "unknown": "Erreur inattendue."
     },
     "abort": {
-      "already_configured": "Cet arrêt est déjà configuré."
+      "already_configured": "Déjà configuré.",
+      "cannot_connect": "Impossible de télécharger les données Palm Bus (transport.data.gouv.fr). Vérifiez la connexion Internet de Home Assistant et réessayez.",
+      "unknown": "Erreur inattendue."
     }
   },
   "options": {
