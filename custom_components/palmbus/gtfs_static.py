@@ -57,6 +57,7 @@ class RouteInfo:
     short_name: str
     long_name: str
     color: str | None = None
+    text_color: str | None = None
 
 
 @dataclass
@@ -179,6 +180,7 @@ class GtfsStaticData:
                         short_name=row.get("route_short_name") or route_id,
                         long_name=row.get("route_long_name") or "",
                         color=row.get("route_color") or None,
+                        text_color=row.get("route_text_color") or None,
                     )
 
             with archive.open("trips.txt") as raw:
@@ -264,6 +266,10 @@ class GtfsStaticData:
 
     def trip_info(self, trip_id: str) -> TripInfo | None:
         return self.trips.get(trip_id)
+
+    def all_routes(self) -> list[RouteInfo]:
+        """Toutes les lignes du réseau, triées."""
+        return sorted(self.routes.values(), key=lambda r: _line_sort_key(r.short_name))
 
     def stop_name(self, stop_id: str) -> str:
         stop = self.stops.get(stop_id)

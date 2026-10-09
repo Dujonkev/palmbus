@@ -15,15 +15,29 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .const import CONF_LINE_FILTER, CONF_MAX_DEPARTURES, CONF_STOP_ID, CONF_STOP_NAME, DEFAULT_MAX_DEPARTURES
+from .const import (
+    CONF_LINE_FILTER,
+    CONF_MAX_DEPARTURES,
+    CONF_MODE,
+    CONF_STOP_ID,
+    CONF_STOP_NAME,
+    DEFAULT_MAX_DEPARTURES,
+    MODE_VEHICLES,
+)
 from .coordinator import PalmBusCoordinator
 from .gtfs_static import async_get_static_data
+from .vehicles import PalmBusVehiclesCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+VEHICLE_PLATFORMS: list[Platform] = [Platform.DEVICE_TRACKER]
 
-PalmBusConfigEntry = ConfigEntry[PalmBusCoordinator]
+PalmBusConfigEntry = ConfigEntry[PalmBusCoordinator | PalmBusVehiclesCoordinator]
+
+
+def _platforms(entry: ConfigEntry) -> list[Platform]:
+    return VEHICLE_PLATFORMS if entry.data.get(CONF_MODE) == MODE_VEHICLES else PLATFORMS
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PalmBusConfigEntry) -> bool:
@@ -34,6 +48,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: PalmBusConfigEntry) -> b
         raise ConfigEntryNotReady(
             "Impossible de télécharger les données GTFS statiques de Palm Bus"
         ) from err
+
+    if entry.data.get(CONF_MODE) == MODE_VEHICLES:
+        vehicles = PalmBusVehiclesCoordinator(
+            hass, static_data, line_filter=entry.options.get(CONF_LINE_FILTER)
+        )
+        await vehicles.async_config_entry_first_refresh()
+        entry.runtime_data = vehicles
+        entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+        await hass.config_entries.async_forward_entry_setups(entry, VEHICLE_PLATFORMS)
+        return True
 
     coordinator = PalmBusCoordinator(
         hass,
@@ -54,7 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PalmBusConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: PalmBusConfigEntry) -> bool:
     """Décharge une entrée de configuration Palm Bus."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return await hass.config_entries.async_unload_platforms(entry, _platforms(entry))
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: PalmBusConfigEntry) -> None:
