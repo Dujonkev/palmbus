@@ -65,30 +65,68 @@ def _marker(
     veh = escape(vehicle[:4])
     line_size = 20 if len(label) <= 2 else 15
     angle = round((bearing or 0) / 15) * 15 % 360  # pas de 15° : limite les changements d'image
+    uid = f"{label}{angle}".replace(" ", "")
     bus = (
-        f'<g transform="rotate({angle} 60 66)">'
-        # ombre
-        '<rect x="47" y="35" width="28" height="66" rx="7" fill="#000" opacity="0.18"/>'
+        "<defs>"
+        # carrosserie : dégradé latéral (effet de volume)
+        f'<linearGradient id="b{uid}" x1="0" x2="1" y1="0" y2="0">'
+        '<stop offset="0" stop-color="#b9bcc0"/><stop offset="0.18" stop-color="#ffffff"/>'
+        '<stop offset="0.82" stop-color="#f1f2f3"/><stop offset="1" stop-color="#9da1a6"/></linearGradient>'
+        # vitres : reflet
+        f'<linearGradient id="g{uid}" x1="0" x2="1" y1="0" y2="1">'
+        '<stop offset="0" stop-color="#5b6b7c"/><stop offset="0.45" stop-color="#1b232c"/>'
+        '<stop offset="1" stop-color="#0b0f14"/></linearGradient>'
+        # toit à la couleur de la ligne, plus clair au centre
+        f'<linearGradient id="r{uid}" x1="0" x2="1" y1="0" y2="0">'
+        f'<stop offset="0" stop-color="{fill}" stop-opacity="0.75"/><stop offset="0.5" stop-color="{fill}"/>'
+        f'<stop offset="1" stop-color="{fill}" stop-opacity="0.75"/></linearGradient>'
+        f'<filter id="s{uid}" x="-30%" y="-30%" width="160%" height="160%">'
+        '<feGaussianBlur stdDeviation="2.2"/></filter>'
+        "</defs>"
+        f'<g transform="rotate({angle} 60 68)">'
+        # ombre portée au sol
+        f'<rect x="47" y="35" width="30" height="70" rx="8" fill="#000" opacity="0.45" filter="url(#s{uid})"/>'
+        # roues (dépassent légèrement)
+        '<rect x="42.5" y="44" width="4" height="10" rx="2" fill="#111"/>'
+        '<rect x="73.5" y="44" width="4" height="10" rx="2" fill="#111"/>'
+        '<rect x="42.5" y="84" width="4" height="10" rx="2" fill="#111"/>'
+        '<rect x="73.5" y="84" width="4" height="10" rx="2" fill="#111"/>'
         # carrosserie
-        '<rect x="45" y="32" width="30" height="68" rx="7" fill="#f4f4f2" stroke="#2b2b2b" stroke-width="2.5"/>'
-        # pare-brise (avant = haut) et lunette arrière
-        '<path d="M48 36 Q60 31 72 36 L72 45 L48 45 Z" fill="#1d1d1f"/>'
-        '<rect x="49" y="92" width="22" height="5" rx="2" fill="#1d1d1f"/>'
-        # toit : bandeau à la couleur de la ligne + blocs de climatisation
-        f'<rect x="51" y="49" width="18" height="38" rx="3" fill="{fill}" opacity="0.85"/>'
-        '<rect x="54" y="55" width="12" height="9" rx="2" fill="#d9d9d6" stroke="#9a9a96" stroke-width="1"/>'
-        '<rect x="54" y="71" width="12" height="9" rx="2" fill="#d9d9d6" stroke="#9a9a96" stroke-width="1"/>'
+        f'<rect x="44" y="31" width="32" height="70" rx="8" fill="url(#b{uid})" stroke="#3a3d41" stroke-width="1.6"/>'
+        # pare-brise avant (haut) et lunette arrière
+        f'<path d="M47 37 Q60 30.5 73 37 L72 46 Q60 43 48 46 Z" fill="url(#g{uid})"/>'
+        '<path d="M50 37.5 Q55 35 60 34.5 L58 40 Q53 40.5 49.5 42 Z" fill="#ffffff" opacity="0.35"/>'
+        f'<rect x="49" y="94" width="22" height="4.5" rx="2" fill="url(#g{uid})"/>'
+        # vitres latérales
+        f'<rect x="45.5" y="49" width="2.6" height="42" rx="1.2" fill="url(#g{uid})"/>'
+        f'<rect x="71.9" y="49" width="2.6" height="42" rx="1.2" fill="url(#g{uid})"/>'
+        # toit coloré + équipements avec ombre/éclairage
+        f'<rect x="50" y="48" width="20" height="44" rx="4" fill="url(#r{uid})"/>'
+        '<rect x="53" y="54" width="14" height="10" rx="2.5" fill="#000" opacity="0.25" transform="translate(1.2 1.2)"/>'
+        '<rect x="53" y="54" width="14" height="10" rx="2.5" fill="#eceeef" stroke="#8d9196" stroke-width="0.8"/>'
+        '<rect x="53" y="72" width="14" height="10" rx="2.5" fill="#000" opacity="0.25" transform="translate(1.2 1.2)"/>'
+        '<rect x="53" y="72" width="14" height="10" rx="2.5" fill="#eceeef" stroke="#8d9196" stroke-width="0.8"/>'
+        '<line x1="55" y1="59" x2="65" y2="59" stroke="#b5b9bd" stroke-width="1"/>'
+        '<line x1="55" y1="77" x2="65" y2="77" stroke="#b5b9bd" stroke-width="1"/>'
+        # reflet de lumière sur le toit
+        '<rect x="52" y="49.5" width="5" height="40" rx="2.5" fill="#fff" opacity="0.25"/>'
+        # phares
+        '<circle cx="49" cy="33.5" r="1.4" fill="#fff8c4"/><circle cx="71" cy="33.5" r="1.4" fill="#fff8c4"/>'
         "</g>"
     )
     badge = (
+        '<circle cx="23" cy="21.5" r="17" fill="#000" opacity="0.3"/>'
         f'<circle cx="22" cy="20" r="17" fill="{fill}" stroke="#fff" stroke-width="3"/>'
+        '<ellipse cx="22" cy="12" rx="11" ry="5" fill="#fff" opacity="0.28"/>'
         f'<text x="22" y="20" dy="0.36em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" '
         f'font-weight="bold" font-size="{line_size}" fill="{text}">{label}</text>'
     )
     pill = ""
     if veh:
         pill = (
+            '<rect x="41" y="10.5" width="44" height="22" rx="11" fill="#000" opacity="0.3"/>'
             '<rect x="40" y="9" width="44" height="22" rx="11" fill="#6b6b6b" stroke="#fff" stroke-width="2"/>'
+            '<rect x="45" y="11" width="34" height="6" rx="3" fill="#fff" opacity="0.18"/>'
             '<text x="62" y="20" dy="0.36em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" '
             f'font-weight="bold" font-size="14" fill="#fff">{veh}</text>'
         )
