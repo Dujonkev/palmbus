@@ -11,6 +11,7 @@ Intégration Home Assistant non officielle pour le réseau de transport en commu
 - Un capteur **prochain passage** par arrêt (`device_class: timestamp`) avec l'horaire du prochain bus, temps réel si disponible.
 - Attributs détaillés sur chaque capteur : ligne, direction, horaire théorique, horaire estimé, retard, couleur de la ligne, et la liste des prochains passages à venir.
 - Un capteur **perturbations** par arrêt, avec le nombre de perturbations en cours sur les lignes concernées.
+- 🗺️ **Bus en temps réel sur la carte** : chaque bus en circulation apparaît sur la carte de Home Assistant, avec une pastille à la couleur de sa ligne, son numéro et une flèche de direction (mise à jour toutes les 15 secondes).
 - Rafraîchissement automatique des données en temps réel (toutes les 30 secondes par défaut).
 - Données statiques (arrêts, lignes, horaires théoriques) mises en cache et rafraîchies toutes les 24 heures.
 - Logo et icônes dédiés, intégrés nativement dans Home Assistant (page Intégrations).
@@ -66,6 +67,29 @@ prochains_passages:
     retard_minutes: null
     couleur_ligne: "#3fb5e8"
 ```
+
+## 🚌 Bus en temps réel sur la carte
+
+1. **Paramètres → Appareils et services → Ajouter une intégration → Palm Bus**.
+2. Choisissez **« Bus en temps réel sur la carte »**, puis les lignes à afficher (vide = toutes).
+
+Chaque bus devient une entité `device_tracker.palm_bus_bus_en_temps_reel_bus_<numéro>` visible sur la carte,
+avec les attributs suivants :
+
+```yaml
+vehicule: "457"
+ligne: A
+direction: Gare SNCF de Cannes
+statut: En route vers
+arret: Passero
+vitesse_kmh: 25.2
+cap: 2
+couleur_ligne: "#00e5ff"
+derniere_position: "2026-10-09T18:55:19+00:00"
+```
+
+Un bus absent du flux depuis plus de 5 minutes devient indisponible et disparaît de la carte.
+Avec une carte filtrée (ex. `auto-entities`), utilisez le motif `device_tracker.palm_bus_bus_en_temps_reel_*`.
 
 ## 🗺️ Source des données
 

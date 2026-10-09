@@ -20,12 +20,15 @@ from .const import (
     CONF_AVAILABLE_LINES,
     CONF_LINE_FILTER,
     CONF_MAX_DEPARTURES,
+    CONF_MODE,
     CONF_STOP_ID,
     CONF_STOP_NAME,
     DEFAULT_MAX_DEPARTURES,
     DOMAIN,
     MAX_MAX_DEPARTURES,
     MIN_MAX_DEPARTURES,
+    MODE_VEHICLES,
+    VEHICLES_UNIQUE_ID,
 )
 from .gtfs_static import GtfsStaticData, RouteInfo, StopInfo, async_get_static_data
 
@@ -64,6 +67,57 @@ class PalmBusConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> Any:
+        """Choix : suivre un arrêt, ou afficher les bus sur la carte."""
+        return self.async_show_menu(step_id="user", menu_options=["search", "vehicles"])
+
+    async def async_step_vehicles(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Carte des bus en temps réel (une seule entrée possible)."""
+        await self.async_set_unique_id(VEHICLES_UNIQUE_ID)
+        self._abort_if_unique_id_configured()
+
+        error = await self._async_ensure_static_data()
+        if error:
+            return self.async_abort(reason=error)
+        assert self._static_data is not None
+        routes = self._static_data.all_routes()
+
+        if user_input is not None:
+            selected = user_input.get(CONF_LINE_FILTER) or []
+            line_filter = None if not selected or len(selected) == len(routes) else selected
+            return self.async_create_entry(
+                title="Bus en temps réel",
+                data={
+                    CONF_MODE: MODE_VEHICLES,
+                    CONF_AVAILABLE_LINES: [
+                        {"route_id": r.route_id, "short_name": r.short_name} for r in routes
+                    ],
+                },
+                options={CONF_LINE_FILTER: line_filter},
+            )
+
+        return self.async_show_form(
+            step_id="vehicles",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_LINE_FILTER, default=[]): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[
+                                SelectOptionDict(value=r.route_id, label=r.short_name)
+                                for r in routes
+                            ],
+                            multiple=True,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_search(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -81,7 +135,7 @@ class PalmBusConfigFlow(ConfigFlow, domain=DOMAIN):
                     return await self.async_step_stop()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="search",
             data_schema=vol.Schema({vol.Required("query"): str}),
             errors=errors,
             description_placeholders={"example": "Hôtel de Ville"},
@@ -199,6 +253,8 @@ class PalmBusOptionsFlow(OptionsFlow):
     ) -> Any:
         available_lines = self._config_entry.data.get(CONF_AVAILABLE_LINES, [])
 
+        is_vehicles = self._config_entry.data.get(CONF_MODE) == MODE_VEHICLES
+
         if user_input is not None:
             selected_lines = user_input.get(CONF_LINE_FILTER) or []
             all_line_ids = [line["route_id"] for line in available_lines]
@@ -207,6 +263,8 @@ class PalmBusOptionsFlow(OptionsFlow):
                 if not selected_lines or set(selected_lines) == set(all_line_ids)
                 else selected_lines
             )
+            if is_vehicles:
+                return self.async_create_entry(data={CONF_LINE_FILTER: line_filter})
             return self.async_create_entry(
                 data={
                     CONF_LINE_FILTER: line_filter,
@@ -239,8 +297,9 @@ class PalmBusOptionsFlow(OptionsFlow):
                     mode=SelectSelectorMode.LIST,
                 )
             )
-        schema_dict[vol.Optional(CONF_MAX_DEPARTURES, default=current_max)] = vol.All(
-            vol.Coerce(int), vol.Range(min=MIN_MAX_DEPARTURES, max=MAX_MAX_DEPARTURES)
-        )
+        if not is_vehicles:
+            schema_dict[vol.Optional(CONF_MAX_DEPARTURES, default=current_max)] = vol.All(
+                vol.Coerce(int), vol.Range(min=MIN_MAX_DEPARTURES, max=MAX_MAX_DEPARTURES)
+            )
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))

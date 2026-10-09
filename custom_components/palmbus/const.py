@@ -58,3 +58,18 @@ ATTR_NEXT_DEPARTURES = "prochains_passages"
 ATTR_STOP_NAME = "nom_arret"
 ATTR_LINES = "lignes"
 ATTR_ALERTS = "perturbations"
+
+# --- Carte des bus en temps réel ---------------------------------------------
+CONF_MODE = "mode"
+MODE_VEHICLES = "vehicles"
+VEHICLES_UNIQUE_ID = "palmbus_vehicles"
+VEHICLES_SCAN_INTERVAL = timedelta(seconds=15)
+# Un bus absent du flux depuis plus longtemps disparaît de la carte.
+VEHICLE_STALE_AFTER = timedelta(minutes=5)
+
+ATTR_VEHICLE = "vehicule"
+ATTR_SPEED = "vitesse_kmh"
+ATTR_BEARING = "cap"
+ATTR_STATUS = "statut"
+ATTR_STOP = "arret"
+ATTR_LAST_REPORT = "derniere_position"
