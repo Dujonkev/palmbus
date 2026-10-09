@@ -50,27 +50,49 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_add_new))
 
 
-def _marker(line: str, color: str | None, text_color: str | None, bearing: float | None) -> str:
-    """Pastille SVG (couleur de la ligne + numéro + flèche de direction) en data URI."""
+def _marker(
+    line: str,
+    color: str | None,
+    text_color: str | None,
+    bearing: float | None,
+    vehicle: str = "",
+) -> str:
+    """Icône SVG en data URI : bus vu du dessus orienté selon son cap,
+    pastille de ligne (couleur officielle) et numéro du véhicule."""
     fill = f"#{color}" if color else "#0a5aa6"
     text = f"#{text_color}" if text_color else "#ffffff"
     label = escape(line[:3])
-    size = 30 if len(label) <= 2 else 24
-    arrow = ""
-    if bearing is not None:
-        angle = round(bearing / 45) * 45 % 360  # 8 directions : évite de changer d'image à chaque degré
-        arrow = (
-            f'<g transform="rotate({angle} 50 50)">'
-            f'<path d="M50 2 L62 20 L38 20 Z" fill="{fill}" stroke="#fff" stroke-width="3"/></g>'
-        )
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        f"{arrow}"
-        f'<circle cx="50" cy="54" r="34" fill="{fill}" stroke="#fff" stroke-width="6"/>'
-        f'<text x="50" y="54" dy="0.35em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" '
-        f'font-weight="bold" font-size="{size}" fill="{text}">{label}</text>'
-        "</svg>"
+    veh = escape(vehicle[:4])
+    line_size = 20 if len(label) <= 2 else 15
+    angle = round((bearing or 0) / 15) * 15 % 360  # pas de 15° : limite les changements d'image
+    bus = (
+        f'<g transform="rotate({angle} 60 66)">'
+        # ombre
+        '<rect x="47" y="35" width="28" height="66" rx="7" fill="#000" opacity="0.18"/>'
+        # carrosserie
+        '<rect x="45" y="32" width="30" height="68" rx="7" fill="#f4f4f2" stroke="#2b2b2b" stroke-width="2.5"/>'
+        # pare-brise (avant = haut) et lunette arrière
+        '<path d="M48 36 Q60 31 72 36 L72 45 L48 45 Z" fill="#1d1d1f"/>'
+        '<rect x="49" y="92" width="22" height="5" rx="2" fill="#1d1d1f"/>'
+        # toit : bandeau à la couleur de la ligne + blocs de climatisation
+        f'<rect x="51" y="49" width="18" height="38" rx="3" fill="{fill}" opacity="0.85"/>'
+        '<rect x="54" y="55" width="12" height="9" rx="2" fill="#d9d9d6" stroke="#9a9a96" stroke-width="1"/>'
+        '<rect x="54" y="71" width="12" height="9" rx="2" fill="#d9d9d6" stroke="#9a9a96" stroke-width="1"/>'
+        "</g>"
     )
+    badge = (
+        f'<circle cx="22" cy="20" r="17" fill="{fill}" stroke="#fff" stroke-width="3"/>'
+        f'<text x="22" y="20" dy="0.36em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" '
+        f'font-weight="bold" font-size="{line_size}" fill="{text}">{label}</text>'
+    )
+    pill = ""
+    if veh:
+        pill = (
+            '<rect x="40" y="9" width="44" height="22" rx="11" fill="#6b6b6b" stroke="#fff" stroke-width="2"/>'
+            '<text x="62" y="20" dy="0.36em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" '
+            f'font-weight="bold" font-size="14" fill="#fff">{veh}</text>'
+        )
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">{bus}{badge}{pill}</svg>'
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
@@ -129,7 +151,7 @@ class PalmBusVehicle(CoordinatorEntity[PalmBusVehiclesCoordinator], TrackerEntit
         vehicle = self._vehicle
         if vehicle is None:
             return None
-        return _marker(vehicle.line, vehicle.color, vehicle.text_color, vehicle.bearing)
+        return _marker(vehicle.line, vehicle.color, vehicle.text_color, vehicle.bearing, vehicle.label)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
