@@ -32,7 +32,12 @@ from .const import DOMAIN, MAX_SEARCH_RESULTS, STATIC_DATA_MAX_AGE, STATIC_GTFS_
 
 _LOGGER = logging.getLogger(__name__)
 
-_CACHE_FILENAME = "palmbus_gtfs_static.zip"
+# Le zip GTFS (~15 Mo) est mis en cache dans <config>/palmbus/ et non dans
+# .storage/, qui est réservé aux stores JSON de Home Assistant et inclus dans
+# chaque sauvegarde.
+_CACHE_DIRNAME = DOMAIN
+_CACHE_FILENAME = "gtfs_static.zip"
+_LEGACY_CACHE_FILENAME = "palmbus_gtfs_static.zip"
 _HASS_DATA_KEY = "static_gtfs"
 _LOCK_KEY = "static_gtfs_lock"
 
@@ -323,7 +328,22 @@ async def async_get_static_data(
                 return cached
 
         session = async_get_clientsession(hass)
-        cache_path = hass.config.path(".storage", _CACHE_FILENAME)
+        cache_path = hass.config.path(_CACHE_DIRNAME, _CACHE_FILENAME)
+        legacy_path = hass.config.path(".storage", _LEGACY_CACHE_FILENAME)
+        await hass.async_add_executor_job(_remove_legacy_cache, legacy_path)
         data = await GtfsStaticData.async_load(session, cache_path, force_refresh=force_refresh)
         domain_data[_HASS_DATA_KEY] = data
         return data
+
+
+def _remove_legacy_cache(legacy_path: str) -> None:
+    """Supprime l'ancien cache placé dans .storage/ (versions <= 1.2.0)."""
+    for path in (legacy_path, f"{legacy_path}.tmp"):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            continue
+        except OSError as err:
+            _LOGGER.debug("Suppression de l'ancien cache %s impossible : %s", path, err)
+        else:
+            _LOGGER.debug("Ancien cache GTFS supprimé : %s", path)
