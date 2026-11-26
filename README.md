@@ -9,6 +9,9 @@ Intégration Home Assistant non officielle pour le réseau de transport en commu
 - Configuration entièrement via l'interface Home Assistant (`config_flow`), sans YAML.
 - Suivi d'un ou plusieurs arrêts de bus, avec filtrage par ligne.
 - Un capteur **prochain passage** par arrêt (`device_class: timestamp`) avec l'horaire du prochain bus, temps réel si disponible.
+- Un capteur **« prochain bus dans »** (en minutes), idéal pour un tableau de bord ou une automatisation (« prévenir quand le bus est à 5 min »).
+- Un capteur **par ligne** suivie à l'arrêt (« Prochain passage ligne 2 », « … ligne 21 »…).
+- **Horaires théoriques en secours** : si une course n'apparaît pas dans le flux temps réel (ou si le flux est en panne), l'horaire théorique du GTFS est affiché (`temps_reel: false`). Les retards annoncés sur les arrêts précédents sont reportés sur votre arrêt, et les courses annulées ou ne desservant pas l'arrêt sont retirées.
 - Attributs détaillés sur chaque capteur : ligne, direction, horaire théorique, horaire estimé, retard, couleur de la ligne, et la liste des prochains passages à venir.
 - Un capteur **perturbations** par arrêt, avec le nombre de perturbations en cours sur les lignes concernées.
 - 🗺️ **Bus en temps réel sur la carte** : chaque bus en circulation apparaît sur la carte de Home Assistant, avec une pastille à la couleur de sa ligne, son numéro et une flèche de direction (mise à jour toutes les 15 secondes).
@@ -35,12 +38,16 @@ Intégration Home Assistant non officielle pour le réseau de transport en commu
 2. Recherchez **Palm Bus**.
 3. Recherchez et sélectionnez le ou les arrêts à suivre, puis, si besoin, filtrez par ligne.
 
-Chaque arrêt configuré crée deux capteurs :
+Chaque arrêt configuré crée les capteurs suivants :
 
 | Capteur | Description |
 |---|---|
 | `sensor.<arret>_prochain_passage` | Horaire du prochain bus (timestamp), avec la liste des prochains passages en attribut |
+| `sensor.<arret>_prochain_bus_dans` | Minutes avant le prochain bus (0 = à l'approche) |
+| `sensor.<arret>_prochain_passage_ligne_<n>` | Prochain passage d'une ligne donnée (un capteur par ligne suivie) |
 | `sensor.<arret>_perturbations` | Nombre de perturbations en cours sur les lignes de cet arrêt |
+
+La liste des lignes suivies (et donc des capteurs par ligne) se modifie dans les **options** de l'arrêt ; les capteurs des lignes retirées sont supprimés automatiquement.
 
 ### Exemple d'attributs du capteur « prochain passage »
 
@@ -48,24 +55,29 @@ Chaque arrêt configuré crée deux capteurs :
 nom_arret: Blanchisserie
 ligne: "2"
 direction: Blanchisserie
-horaire_theorique: "2026-09-03T22:05:54+00:00"
+horaire_theorique: "2026-09-03T22:03:00+00:00"
 horaire_estime: "2026-09-03T22:05:54+00:00"
 temps_reel: true
-retard_minutes: null
+retard_minutes: 3
 couleur_ligne: "#3fb5e8"
+dans_minutes: 4
 prochains_passages:
   - ligne: "2"
     direction: Blanchisserie
+    horaire_theorique: "2026-09-03T22:03:00+00:00"
     horaire_estime: "2026-09-03T22:05:54+00:00"
     temps_reel: true
-    retard_minutes: null
+    retard_minutes: 3
     couleur_ligne: "#3fb5e8"
+    dans_minutes: 4
   - ligne: "2"
     direction: Les Bastides
+    horaire_theorique: "2026-09-03T22:20:00+00:00"
     horaire_estime: "2026-09-03T22:20:00+00:00"
-    temps_reel: true
+    temps_reel: false
     retard_minutes: null
     couleur_ligne: "#3fb5e8"
+    dans_minutes: 18
 ```
 
 ## 🚌 Bus en temps réel sur la carte
@@ -89,7 +101,33 @@ derniere_position: "2026-10-09T18:55:19+00:00"
 ```
 
 Un bus absent du flux depuis plus de 5 minutes devient indisponible et disparaît de la carte.
+Au bout d'une heure sans nouvelles (fin de service), son entité est supprimée : elle sera recréée automatiquement quand le bus reprendra du service. Plus d'entités « fantômes » qui s'accumulent.
 Avec une carte filtrée (ex. `auto-entities`), utilisez le motif `device_tracker.palm_bus_bus_en_temps_reel_*`.
+
+## 🩺 Diagnostics
+
+En cas de souci, **Paramètres → Appareils et services → Palm Bus → ⋮ → Télécharger les diagnostics** produit un résumé (version du GTFS, nombre d'horaires chargés pour l'arrêt, disponibilité du temps réel, prochains passages calculés) à joindre à une [issue](https://github.com/Dujonkev/palmbus/issues).
+
+## 🧪 Développement
+
+```bash
+pip install -r requirements_test.txt
+pytest
+```
+
+Les tests s'appuient sur un petit réseau GTFS fictif (`tests/conftest.py`) et des flux GTFS-RT construits à la main ; ils sont lancés automatiquement par GitHub Actions avec hassfest et la validation HACS.
+
+## 📝 Nouveautés
+
+### 1.3.0
+- Horaires théoriques en secours du temps réel (calendrier GTFS, courses après minuit, changement d'heure, propagation des retards, courses annulées).
+- Nouveaux capteurs : « prochain bus dans » (minutes) et prochain passage par ligne.
+- Attribut `horaire_theorique` désormais renseigné, nouvel attribut `dans_minutes`.
+- Les bus qui ne circulent plus sont supprimés de Home Assistant au bout d'une heure.
+- Téléchargement des diagnostics.
+- Traductions anglaises complètes.
+- Version minimale de Home Assistant corrigée : 2024.4.
+- Tests automatisés (pytest) dans la CI.
 
 ## 🗺️ Source des données
 

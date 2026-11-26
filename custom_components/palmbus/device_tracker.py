@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -34,20 +35,41 @@ async def async_setup_entry(
     entry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Crée une entité par bus, au fur et à mesure qu'ils apparaissent dans le flux."""
+    """Crée une entité par bus, au fur et à mesure qu'ils apparaissent dans le flux.
+
+    Les bus qui ne circulent plus (oubliés par le coordinateur) voient leur
+    entité supprimée, pour ne pas accumuler des entités « indisponibles ».
+    """
     coordinator: PalmBusVehiclesCoordinator = entry.runtime_data
+    registry = er.async_get(hass)
+    prefix = f"{entry.entry_id}_vehicle_"
     known: set[str] = set()
 
+    # Entités laissées par une exécution précédente pour des bus qui ne
+    # sont plus dans le flux.
+    current = set(coordinator.data or {})
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain != "device_tracker" or not reg_entry.unique_id.startswith(prefix):
+            continue
+        if reg_entry.unique_id.removeprefix(prefix) not in current:
+            registry.async_remove(reg_entry.entity_id)
+
     @callback
-    def _add_new() -> None:
-        new = [vid for vid in (coordinator.data or {}) if vid not in known]
+    def _sync_entities() -> None:
+        data = coordinator.data or {}
+        for vid in [vid for vid in known if vid not in data]:
+            known.discard(vid)
+            entity_id = registry.async_get_entity_id("device_tracker", DOMAIN, f"{prefix}{vid}")
+            if entity_id:
+                registry.async_remove(entity_id)
+        new = [vid for vid in data if vid not in known]
         if not new:
             return
         known.update(new)
         async_add_entities(PalmBusVehicle(coordinator, entry.entry_id, vid) for vid in new)
 
-    _add_new()
-    entry.async_on_unload(coordinator.async_add_listener(_add_new))
+    _sync_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_sync_entities))
 
 
 def _marker(

@@ -2,61 +2,61 @@
   "config": {
     "step": {
       "stop": {
-        "title": "Choisir l'arrêt",
-        "description": "Plusieurs arrêts correspondent à votre recherche. Sélectionnez le bon.",
+        "title": "Choose the stop",
+        "description": "Several stops match your search. Select the right one.",
         "data": {
-          "stop_id": "Arrêt"
+          "stop_id": "Stop"
         }
       },
       "lines": {
-        "title": "Lignes à suivre",
-        "description": "Arrêt sélectionné : {stop_name}. Choisissez les lignes à suivre à cet arrêt (laissez vide pour toutes les suivre) et le nombre de prochains passages à afficher.",
+        "title": "Lines to track",
+        "description": "Selected stop: {stop_name}. Choose which lines to track at this stop (leave empty to track all of them) and how many upcoming departures to show.",
         "data": {
-          "line_filter": "Lignes à suivre",
-          "max_departures": "Nombre de prochains passages"
+          "line_filter": "Lines to track",
+          "max_departures": "Number of upcoming departures"
         }
       },
       "search": {
-        "title": "Rechercher un arrêt Palm Bus",
-        "description": "Indiquez le nom (ou une partie du nom) de l'arrêt de bus à suivre, par exemple « {example} ».",
+        "title": "Search for a Palm Bus stop",
+        "description": "Enter the name (or part of the name) of the bus stop to track, e.g. \"{example}\".",
         "data": {
-          "query": "Nom de l'arrêt"
+          "query": "Stop name"
         }
       },
       "user": {
         "title": "Palm Bus",
-        "description": "Que voulez-vous ajouter ?",
+        "description": "What do you want to add?",
         "menu_options": {
-          "search": "Suivre un arrêt (prochains passages)",
-          "vehicles": "Bus en temps réel sur la carte"
+          "search": "Follow a stop (next departures)",
+          "vehicles": "Live buses on the map"
         }
       },
       "vehicles": {
-        "title": "Bus en temps réel sur la carte",
-        "description": "Chaque bus en circulation apparaîtra sur la carte de Home Assistant (pastille à la couleur de sa ligne). Choisissez les lignes à afficher (laissez vide pour toutes).",
+        "title": "Live buses on the map",
+        "description": "Every running bus will appear on the Home Assistant map (badge in its line colour). Choose the lines to show (leave empty for all).",
         "data": {
-          "line_filter": "Lignes à afficher"
+          "line_filter": "Lines to show"
         }
       }
     },
     "error": {
-      "cannot_connect": "Impossible de télécharger les données Palm Bus (transport.data.gouv.fr). Vérifiez la connexion Internet de Home Assistant et réessayez.",
-      "no_stops_found": "Aucun arrêt ne correspond à cette recherche.",
-      "unknown": "Erreur inattendue."
+      "cannot_connect": "Could not download Palm Bus data (transport.data.gouv.fr). Check Home Assistant's Internet connection and try again.",
+      "no_stops_found": "No stop matches this search.",
+      "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "Déjà configuré.",
-      "cannot_connect": "Impossible de télécharger les données Palm Bus (transport.data.gouv.fr). Vérifiez la connexion Internet de Home Assistant et réessayez.",
-      "unknown": "Erreur inattendue."
+      "already_configured": "Already configured.",
+      "cannot_connect": "Could not download Palm Bus data (transport.data.gouv.fr). Check Home Assistant's Internet connection and try again.",
+      "unknown": "Unexpected error."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Paramètres Palm Bus",
+        "title": "Palm Bus settings",
         "data": {
-          "line_filter": "Lignes à suivre",
-          "max_departures": "Nombre de prochains passages"
+          "line_filter": "Lines to track",
+          "max_departures": "Number of upcoming departures"
         }
       }
     }
@@ -64,10 +64,16 @@
   "entity": {
     "sensor": {
       "next_departure": {
-        "name": "Prochain passage"
+        "name": "Next departure"
       },
       "alerts": {
-        "name": "Perturbations"
+        "name": "Disruptions"
+      },
+      "minutes_until": {
+        "name": "Next bus in"
+      },
+      "line_next_departure": {
+        "name": "Line {line} next departure"
       }
     }
   }

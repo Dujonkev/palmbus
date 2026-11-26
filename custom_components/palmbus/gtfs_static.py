@@ -1,16 +1,17 @@
 """Téléchargement et analyse du GTFS statique de Palm Bus.
 
-Le fichier GTFS statique n'est utilisé que pour :
+Le fichier GTFS statique sert à :
 - rechercher un arrêt par son nom (config flow) ;
 - lister les lignes qui desservent un arrêt donné (config flow) ;
 - retrouver le nom court d'une ligne, sa couleur et la destination
-  (trip_headsign) d'une course pour l'affichage.
+  (trip_headsign) d'une course pour l'affichage ;
+- calculer les horaires théoriques d'un arrêt suivi, utilisés en secours
+  quand une course n'est pas (ou plus) présente dans le flux temps réel.
 
-Les prochains passages eux-mêmes proviennent uniquement du flux GTFS-RT
-(temps réel), ce qui évite de devoir recalculer les horaires théoriques à
-partir de calendar.txt / calendar_dates.txt (fichier stop_times.txt de ce
-réseau : plus d'un million de lignes, inadapté à un recalcul régulier sur
-du matériel domestique).
+stop_times.txt compte plus d'un million de lignes sur ce réseau : il n'est
+jamais chargé en entier. Pour chaque arrêt suivi, on n'en extrait qu'une
+fois (par version du GTFS) les quelques milliers de lignes qui le
+concernent, dans un executor.
 """
 from __future__ import annotations
 
@@ -22,13 +23,15 @@ import os
 import time
 import zipfile
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN, MAX_SEARCH_RESULTS, STATIC_DATA_MAX_AGE, STATIC_GTFS_URL
+from .const import DOMAIN, MAX_SEARCH_RESULTS, STATIC_DATA_MAX_AGE, STATIC_GTFS_URL, TIMEZONE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +74,25 @@ class TripInfo:
 
     route_id: str
     headsign: str
+    service_id: str = ""
+
+
+@dataclass(frozen=True)
+class StopTime:
+    """Un passage théorique d'une course à l'arrêt suivi."""
+
+    trip_id: str
+    seconds: int  # secondes depuis « midi moins 12 h » du jour de service (peut dépasser 24 h)
+    stop_sequence: int | None
+
+
+@dataclass
+class ServiceCalendar:
+    """Une ligne de calendar.txt."""
+
+    weekdays: tuple[bool, bool, bool, bool, bool, bool, bool]  # lundi → dimanche
+    start: date
+    end: date
 
 
 @dataclass
@@ -80,9 +102,13 @@ class GtfsStaticData:
     stops: dict[str, StopInfo] = field(default_factory=dict)
     routes: dict[str, RouteInfo] = field(default_factory=dict)
     trips: dict[str, TripInfo] = field(default_factory=dict)
+    calendar: dict[str, ServiceCalendar] = field(default_factory=dict)
+    # service_id -> {date: True (ajouté) / False (supprimé)}
+    calendar_dates: dict[str, dict[date, bool]] = field(default_factory=dict)
     fetched_at: float = 0.0
     _zip_path: str | None = field(default=None, repr=False)
     _trip_ids_cache: dict[str, set[str]] = field(default_factory=dict, repr=False)
+    _stop_times_cache: dict[str, list[StopTime]] = field(default_factory=dict, repr=False)
 
     # -- Chargement -----------------------------------------------------
 
@@ -140,24 +166,64 @@ class GtfsStaticData:
         os.replace(tmp_path, cache_path)
 
     async def _async_parse_light_tables(self) -> None:
-        """Analyse stops.txt, routes.txt et trips.txt (tables raisonnables)."""
+        """Analyse stops, routes, trips et calendriers (tables raisonnables)."""
         loop = asyncio.get_running_loop()
-        stops, routes, trips = await loop.run_in_executor(
+        stops, routes, trips, calendar, calendar_dates = await loop.run_in_executor(
             None, self._parse_light_tables_sync, self._zip_path
         )
         self.stops = stops
         self.routes = routes
         self.trips = trips
+        self.calendar = calendar
+        self.calendar_dates = calendar_dates
 
     @staticmethod
     def _parse_light_tables_sync(
         zip_path: str,
-    ) -> tuple[dict[str, StopInfo], dict[str, RouteInfo], dict[str, TripInfo]]:
+    ) -> tuple[
+        dict[str, StopInfo],
+        dict[str, RouteInfo],
+        dict[str, TripInfo],
+        dict[str, ServiceCalendar],
+        dict[str, dict[date, bool]],
+    ]:
         stops: dict[str, StopInfo] = {}
         routes: dict[str, RouteInfo] = {}
         trips: dict[str, TripInfo] = {}
+        calendar: dict[str, ServiceCalendar] = {}
+        calendar_dates: dict[str, dict[date, bool]] = {}
 
         with zipfile.ZipFile(zip_path) as archive:
+            names = set(archive.namelist())
+
+            # calendar.txt et calendar_dates.txt sont tous deux facultatifs
+            # dans la norme GTFS (au moins l'un des deux est présent).
+            if "calendar.txt" in names:
+                with archive.open("calendar.txt") as raw:
+                    for row in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig")):
+                        service_id = row.get("service_id")
+                        start = _parse_gtfs_date(row.get("start_date"))
+                        end = _parse_gtfs_date(row.get("end_date"))
+                        if not service_id or start is None or end is None:
+                            continue
+                        calendar[service_id] = ServiceCalendar(
+                            weekdays=tuple(
+                                (row.get(day) or "0").strip() == "1" for day in _WEEKDAYS
+                            ),
+                            start=start,
+                            end=end,
+                        )
+
+            if "calendar_dates.txt" in names:
+                with archive.open("calendar_dates.txt") as raw:
+                    for row in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig")):
+                        service_id = row.get("service_id")
+                        day = _parse_gtfs_date(row.get("date"))
+                        exception = (row.get("exception_type") or "").strip()
+                        if not service_id or day is None or exception not in ("1", "2"):
+                            continue
+                        calendar_dates.setdefault(service_id, {})[day] = exception == "1"
+
             with archive.open("stops.txt") as raw:
                 for row in csv.DictReader(io.TextIOWrapper(raw, encoding="utf-8-sig")):
                     stop_id = row.get("stop_id")
@@ -196,9 +262,10 @@ class GtfsStaticData:
                     trips[trip_id] = TripInfo(
                         route_id=row.get("route_id", ""),
                         headsign=row.get("trip_headsign") or "",
+                        service_id=row.get("service_id") or "",
                     )
 
-        return stops, routes, trips
+        return stops, routes, trips, calendar, calendar_dates
 
     # -- Recherche --------------------------------------------------------
 
@@ -241,17 +308,23 @@ class GtfsStaticData:
 
     async def async_load_routes_for_stop(self, stop_id: str) -> list[RouteInfo]:
         """Parcourt stop_times.txt (une seule fois) pour trouver les lignes d'un arrêt."""
-        if stop_id not in self._trip_ids_cache:
-            loop = asyncio.get_running_loop()
-            trip_ids = await loop.run_in_executor(
-                None, self._trip_ids_for_stop_sync, self._zip_path, stop_id
-            )
-            self._trip_ids_cache[stop_id] = trip_ids
+        await self.async_load_stop_times(stop_id)
         return self.routes_for_stop_id(stop_id)
 
+    async def async_load_stop_times(self, stop_id: str) -> list[StopTime]:
+        """Horaires théoriques d'un arrêt, extraits une seule fois de stop_times.txt."""
+        if stop_id not in self._stop_times_cache:
+            loop = asyncio.get_running_loop()
+            stop_times = await loop.run_in_executor(
+                None, self._stop_times_for_stop_sync, self._zip_path, stop_id
+            )
+            self._stop_times_cache[stop_id] = stop_times
+            self._trip_ids_cache[stop_id] = {st.trip_id for st in stop_times}
+        return self._stop_times_cache[stop_id]
+
     @staticmethod
-    def _trip_ids_for_stop_sync(zip_path: str, stop_id: str) -> set[str]:
-        trip_ids: set[str] = set()
+    def _stop_times_for_stop_sync(zip_path: str, stop_id: str) -> list[StopTime]:
+        stop_times: list[StopTime] = []
         with zipfile.ZipFile(zip_path) as archive:
             with archive.open("stop_times.txt") as raw:
                 reader = csv.reader(io.TextIOWrapper(raw, encoding="utf-8-sig"))
@@ -260,11 +333,92 @@ class GtfsStaticData:
                     stop_idx = header.index("stop_id")
                     trip_idx = header.index("trip_id")
                 except ValueError:
-                    return trip_ids
+                    return stop_times
+                dep_idx = header.index("departure_time") if "departure_time" in header else -1
+                arr_idx = header.index("arrival_time") if "arrival_time" in header else -1
+                seq_idx = header.index("stop_sequence") if "stop_sequence" in header else -1
                 for row in reader:
-                    if len(row) > stop_idx and row[stop_idx] == stop_id:
-                        trip_ids.add(row[trip_idx])
-        return trip_ids
+                    if len(row) <= stop_idx or row[stop_idx] != stop_id:
+                        continue
+                    seconds = None
+                    for idx in (dep_idx, arr_idx):
+                        if 0 <= idx < len(row):
+                            seconds = _parse_gtfs_time(row[idx])
+                            if seconds is not None:
+                                break
+                    sequence = None
+                    if 0 <= seq_idx < len(row):
+                        try:
+                            sequence = int(row[seq_idx])
+                        except ValueError:
+                            sequence = None
+                    if seconds is None:
+                        # Passage sans horaire (arrêt « interpolé ») : on le
+                        # garde pour la liste des lignes, avec un horaire nul
+                        # qui sera ignoré par scheduled_departures().
+                        seconds = -1
+                    stop_times.append(StopTime(row[trip_idx], seconds, sequence))
+        return stop_times
+
+    def cached_stop_times(self, stop_id: str) -> list[StopTime]:
+        """Horaires déjà extraits pour cet arrêt (liste vide sinon)."""
+        return self._stop_times_cache.get(stop_id, [])
+
+    # -- Horaires théoriques ------------------------------------------------
+
+    def is_service_active(self, service_id: str, day: date) -> bool:
+        """Indique si un service (calendar / calendar_dates) circule ce jour-là."""
+        exceptions = self.calendar_dates.get(service_id)
+        if exceptions is not None and day in exceptions:
+            return exceptions[day]
+        cal = self.calendar.get(service_id)
+        if cal is None:
+            return False
+        return cal.start <= day <= cal.end and cal.weekdays[day.weekday()]
+
+    def scheduled_departures(
+        self, stop_id: str, start: datetime, end: datetime
+    ) -> list[tuple[StopTime, datetime]]:
+        """Passages théoriques (en UTC) à l'arrêt entre `start` et `end` (datetimes avec fuseau).
+
+        Nécessite `async_load_stop_times(stop_id)` au préalable. Les horaires
+        GTFS peuvent dépasser 24:00:00 (courses après minuit rattachées au
+        jour de service de la veille), d'où la prise en compte de la veille.
+        """
+        stop_times = self._stop_times_cache.get(stop_id)
+        if not stop_times:
+            return []
+
+        tz = ZoneInfo(TIMEZONE)
+        first_day = start.astimezone(tz).date() - timedelta(days=1)
+        last_day = end.astimezone(tz).date()
+        results: list[tuple[StopTime, datetime]] = []
+
+        day = first_day
+        while day <= last_day:
+            active: dict[str, bool] = {}
+            # Référence GTFS : « midi moins 12 h », correcte les jours de
+            # changement d'heure.
+            reference = datetime(day.year, day.month, day.day, 12, tzinfo=tz) - timedelta(
+                hours=12
+            )
+            for stop_time in stop_times:
+                if stop_time.seconds < 0:
+                    continue
+                trip = self.trips.get(stop_time.trip_id)
+                if trip is None:
+                    continue
+                if trip.service_id not in active:
+                    active[trip.service_id] = self.is_service_active(trip.service_id, day)
+                if not active[trip.service_id]:
+                    continue
+                when = (reference + timedelta(seconds=stop_time.seconds)).astimezone(timezone.utc)
+                if start <= when <= end:
+                    results.append((stop_time, when))
+            day += timedelta(days=1)
+
+        results.sort(key=lambda item: item[1])
+        return results
 
     def route_info(self, route_id: str) -> RouteInfo:
         return self.routes.get(route_id) or RouteInfo(route_id, route_id, "")
@@ -279,6 +433,32 @@ class GtfsStaticData:
     def stop_name(self, stop_id: str) -> str:
         stop = self.stops.get(stop_id)
         return stop.name if stop else stop_id
+
+
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _parse_gtfs_date(value: str | None) -> date | None:
+    """« 20261126 » → date(2026, 11, 26)."""
+    value = (value or "").strip()
+    if len(value) != 8 or not value.isdigit():
+        return None
+    try:
+        return date(int(value[:4]), int(value[4:6]), int(value[6:]))
+    except ValueError:
+        return None
+
+
+def _parse_gtfs_time(value: str | None) -> int | None:
+    """« 25:10:30 » → secondes depuis le début du jour de service."""
+    parts = (value or "").strip().split(":")
+    if len(parts) != 3:
+        return None
+    try:
+        hours, minutes, seconds = (int(p) for p in parts)
+    except ValueError:
+        return None
+    return hours * 3600 + minutes * 60 + seconds
 
 
 def _normalize(text: str) -> str:

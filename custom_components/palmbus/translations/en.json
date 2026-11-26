@@ -68,6 +68,12 @@
       },
       "alerts": {
         "name": "Disruptions"
+      },
+      "minutes_until": {
+        "name": "Next bus in"
+      },
+      "line_next_departure": {
+        "name": "Line {line} next departure"
       }
     }
   }

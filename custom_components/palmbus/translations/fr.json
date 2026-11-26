@@ -68,6 +68,12 @@
       },
       "alerts": {
         "name": "Perturbations"
+      },
+      "minutes_until": {
+        "name": "Prochain bus dans"
+      },
+      "line_next_departure": {
+        "name": "Prochain passage ligne {line}"
       }
     }
   }

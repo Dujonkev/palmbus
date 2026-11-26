@@ -11,7 +11,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, GTFS_RT_VEHICLE_POSITIONS_URL, VEHICLES_SCAN_INTERVAL
+from .const import (
+    DOMAIN,
+    GTFS_RT_VEHICLE_POSITIONS_URL,
+    VEHICLE_PURGE_AFTER,
+    VEHICLES_SCAN_INTERVAL,
+)
 from .gtfs_static import GtfsStaticData, async_get_static_data
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,7 +99,13 @@ class PalmBusVehiclesCoordinator(DataUpdateCoordinator[dict[str, Vehicle]]):
                 continue
             self._vehicles[vehicle.vehicle_id] = vehicle
         # On garde les bus absents de ce flux : les entités les rendent
-        # indisponibles (donc invisibles sur la carte) après VEHICLE_STALE_AFTER.
+        # indisponibles (donc invisibles sur la carte) après VEHICLE_STALE_AFTER,
+        # puis ils sont oubliés après VEHICLE_PURGE_AFTER (fin de service).
+        purge_before = now - VEHICLE_PURGE_AFTER.total_seconds()
+        for vehicle_id in [
+            vid for vid, veh in self._vehicles.items() if veh.received < purge_before
+        ]:
+            del self._vehicles[vehicle_id]
         return dict(self._vehicles)
 
     def _parse(self, pos, now: float) -> Vehicle | None:

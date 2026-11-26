@@ -44,6 +44,12 @@ STATIC_DATA_MAX_AGE = timedelta(hours=24)
 # Fenêtre de recherche des prochains passages théoriques (utilisée pour
 # ignorer les données GTFS-RT aberrantes, ex : trajets déjà passés).
 DEPARTURE_PAST_TOLERANCE = timedelta(minutes=2)
+# Horaires théoriques : jusqu'où chercher les prochains passages, et depuis
+# quand (un bus parti en retard peut encore être attendu).
+SCHEDULE_HORIZON = timedelta(hours=24)
+LATE_BUS_WINDOW = timedelta(hours=2)
+# Nombre de passages conservés en mémoire (alimente les capteurs par ligne).
+MAX_KEPT_DEPARTURES = 60
 
 MAX_SEARCH_RESULTS = 25
 
@@ -66,6 +72,9 @@ VEHICLES_UNIQUE_ID = "palmbus_vehicles"
 VEHICLES_SCAN_INTERVAL = timedelta(seconds=15)
 # Un bus absent du flux depuis plus longtemps disparaît de la carte.
 VEHICLE_STALE_AFTER = timedelta(minutes=5)
+# Au-delà, le bus est oublié et son entité supprimée (elle sera recréée
+# automatiquement s'il reprend du service).
+VEHICLE_PURGE_AFTER = timedelta(hours=1)
 
 ATTR_VEHICLE = "vehicule"
 ATTR_SPEED = "vitesse_kmh"
